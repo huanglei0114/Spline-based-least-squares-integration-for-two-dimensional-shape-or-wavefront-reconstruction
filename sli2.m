@@ -1,44 +1,38 @@
-function zsli2 = sli2(sx, sy, x, y)
+function z_sli2 = sli2(sx, sy, x, y)
 %SLI2 Spline-based Least-squares integration.
 %   D * Z = G (G is mainly composed by spline estimated values).
 
-%   Copyright since 2016, Lei Huang. All Rights Reserved.
+%   Copyright since 2016 by Lei Huang. All Rights Reserved.
 %   E-mail: huanglei0114@gmail.com
-%
 %   2016-09-29 Original Version
 
-
+% Check the number of arguments............................................
 % Validate number of input arguments.
 narginchk(4,4);
 % Validate number of output arguments.
 nargoutchk(1,1);
 
-
-% Calculate size and mask..................................................
+% Generate Matrix D and G..................................................
+% Calculate size and ValidMask.
 [Ny, Nx] = size(sx);
 ValidMask = isfinite(sx) & isfinite(sy);
 
-% Compose matrix D.........................................................
 % Expand sy and y.
-sy = [sy;NaN(1,Nx)];
-y  = [y ;NaN(1,Nx)];
+sy = [sy; NaN(1,Nx)];
+y  = [y ; NaN(1,Nx)];
 
-% Compose matrix.
+% Compose matrices Dx and Dy.
 ee = ones(Ny*Nx,1);
 Dx = spdiags([-ee,ee],[0,Ny],Ny*(Nx-1),Ny*Nx); 
 Dy = spdiags([-ee,ee],[0,1],Ny*Nx,Ny*Nx);
-gx = (sx(:,1:end-1)+sx(:,2:end)).*(x(:,2:end)-x(:,1:end-1))/2;  
-gy = (sy(1:end-1,:)+sy(2:end,:)).*(y(2:end,:)-y(1:end-1,:))/2; 
 
-% Delete NaN points.
-% D
-Dx(isnan(gx(:)),:)=[];
-Dy(isnan(gy(:)),:)=[];
-D = [Dx;Dy];
+% Compose matrices Gx and Gy.
+Gx = (sx(:,1:end-1)+sx(:,2:end)).*(x(:,2:end)-x(:,1:end-1))/2;  
+Gy = (sy(1:end-1,:)+sy(2:end,:)).*(y(2:end,:)-y(1:end-1,:))/2; 
+
+% Compose D.
+D = [Dx(isfinite(Gx),:); Dy(isfinite(Gy),:)];
 clear Dx Dy;
-
-
-% Compose matrix g.........................................................
 
 % Compose matrix SpGx.
 spGx = ComposeSpGx(x,sx,ValidMask,Nx,Ny);
@@ -47,25 +41,26 @@ spGy = ComposeSpGy(y,sy,ValidMask,Nx,Ny);
 clear sx sy x y;
 
 % Replace with spline values, if available.
-gy(end,:)=[];
-gx(isfinite(spGx)) = spGx(isfinite(spGx));
-gy(isfinite(spGy)) = spGy(isfinite(spGy));
+Gy(end,:)=[];
+Gx(isfinite(spGx)) = spGx(isfinite(spGx));
+Gy(isfinite(spGy)) = spGy(isfinite(spGy));
 
-% g
-g = [gx(:);gy(:)];
-g = g(isfinite(g));
-clear gx gy;
+% Compose G.
+G = [Gx(isfinite(Gx)); Gy(isfinite(Gy))];
+clear Gx Gy;
 
 % Solve "Warning: Rank deficient" for complete data by assuming Z(Ind)=0.  
 Ind = find(D(1,:)==-1,1);
 D(:,Ind) = [];
-Z = D\g;
+Z = D\G;
 Z = [Z(1:Ind-1);0;Z(Ind:end)];
 
-% Compose 2D matrix of z.
-zsli2 = reshape(Z,Ny,Nx);
-clear Z;
-zsli2(~ValidMask)= NaN;
+% % Reconstructed result.
+% z_sli2 = NaN(Ny,Nx);
+% z_sli2(ValidMask)= Z;
+% Reconstructed result.
+z_sli2 = reshape(Z,Ny,Nx);
+z_sli2(~ValidMask)= nan;
 
 end
 
@@ -84,21 +79,12 @@ for ny = 1:Ny
     
     % Check the number of sections.
     ml = ValidMask(ny,:)';   
-    if all(ml)==true      
-        Ns = 1;
-    else
-        ss = regionprops(ml,'PixelIdxList');
-        Ns = length(ss);
-    end
+    [Ns, Indices] = CheckSection(ml, Nx);
     
     % Spline fitting section by section.
     gs = cell(Ns,1);
     for ns = 1:Ns
-        if all(ml)==true
-            idx = 1:Nx;
-        else
-            idx = ceil(ss(ns).PixelIdxList);
-        end
+        idx = Indices{ns};
         xx = xl(idx);
         vv = vl(idx);
         if length(xx)>1
@@ -151,21 +137,12 @@ for nx = 1:Nx
     
     % Check the number of sections.
     ml = ValidMask(:,nx);
-    if all(ml)==true      
-        Ns = 1;
-    else
-        ss = regionprops(ml,'PixelIdxList');
-        Ns = length(ss);
-    end
+    [Ns, Indices] = CheckSection(ml, Ny);
     
     % Spline fitting section by section.
     gs = cell(Ns,1);
     for ns = 1:Ns
-        if all(ml)==true
-            idx = 1:Nx;
-        else
-            idx = ceil(ss(ns).PixelIdxList);
-        end
+        idx = Indices{ns};
         yy = yl(idx);
         vv = vl(idx);
         if length(yy)>1
@@ -203,6 +180,51 @@ for nx = 1:Nx
         if Valid(ny) == 1
             SpGy(ny, nx) = sg(pt);
             pt = pt + 1;
+        end
+    end
+end
+end
+
+
+% Check Sections.
+function [Ns, Indices] = CheckSection(ml, N)
+if all(ml)==true      
+    Ns = 1;
+    Indices{Ns} = 1:N;
+else
+    Indices = cell(N,1);
+    first = nan;
+    last = nan;
+    Ns = 0;
+    for n = 1:N
+        % Find the first.
+        if n==1
+            if ml(n)==true
+                first = n;
+            end
+        else
+            if ml(n)==true && ml(n-1)==false
+                first = n;
+            end
+        end
+
+        % Find the last.
+        if n==N
+            if ml(n)==true
+                last = n;
+            end
+        else
+            if ml(n)==true && ml(n+1)==false
+                last = n;
+            end
+        end
+
+        % Sum up the total number of sections and compose the Indices.
+        if isfinite(first) && isfinite(last)
+            Ns = Ns + 1;
+            Indices{Ns} = first:last;
+            first = nan;
+            last = nan;
         end
     end
 end

@@ -4,22 +4,21 @@ function zsli2p = sli2p(sx, sy, x, y)
 
 %   Copyright since 2016, Lei Huang. All Rights Reserved.
 %   E-mail: huanglei0114@gmail.com
-%
 %   2016-09-29 Original Version
 
+% Check the number of arguments............................................
 % Validate number of input arguments.
 narginchk(4,4);
 % Validate number of output arguments.
 nargoutchk(1,1); 
 
+% Generate Matrix D and G..................................................
 % Calculate size and mask.
 [Ny, Nx] = size(sx);
 ValidMask = isfinite(sx) & isfinite(sy);
 
-% Compose matrix D.........................................................
-
-% Expand sy and y.
-sy = [sy;NaN(1,Nx)];
+% Expand sy.
+sy = [sy; NaN(1,Nx)];
 
 % Compose matrix.
 ee = ones(Ny*Nx,1);
@@ -28,14 +27,13 @@ Dy = spdiags([-ee,ee],[0,1],Ny*Nx,Ny*Nx);
 mx = isnan(sx(:,1:end-1)+sx(:,2:end));
 my = isnan(sy(1:end-1,:)+sy(2:end,:));
 
-% Delete NaN points
-% D
+% Compose D.
 Dx(mx(:),:)=[];
 Dy(my(:),:)=[];
 D = [Dx;Dy];
 clear Dx Dy mx my;
 
-% Compose matrix G.........................................................
+% Compose matrix G.
 SpGx = ComposeSpGx(x,sx,ValidMask,Nx,Ny);
 SpGy = ComposeSpGy(y,sy,ValidMask,Nx,Ny);
 clear sx sy x y;
@@ -53,7 +51,6 @@ Z = [Z(1:Ind-1);0;Z(Ind:end)];
 
 % Compose 2D matrix of z.
 zsli2p = reshape(Z,Ny,Nx);
-clear Z;
 zsli2p(~ValidMask)= NaN;
 
 end
@@ -74,21 +71,12 @@ for ny = 1:Ny
     
     % Check the number of sections.
     ml = ValidMask(ny,:)';   
-    if all(ml)==true      
-        Ns = 1;
-    else
-        ss = regionprops(ml,'PixelIdxList');
-        Ns = length(ss);
-    end
+    [Ns, Indices] = CheckSection(ml, Nx);
     
     % Spline fitting section by section.
     gs = cell(Ns,1);
     for ns = 1:Ns
-        if all(ml)==true
-            idx = 1:Nx;
-        else
-            idx = ceil(ss(ns).PixelIdxList);
-        end        
+        idx = Indices{ns};
         xx = xl(idx);
         vv = vl(idx);
         if length(xx)>1
@@ -141,21 +129,12 @@ for nx = 1:Nx
     
     % Check the number of sections.
     ml = ValidMask(:,nx);
-    if all(ml)==true      
-        Ns = 1;
-    else
-        ss = regionprops(ml,'PixelIdxList');
-        Ns = length(ss);
-    end
+    [Ns, Indices] = CheckSection(ml, Ny);
     
     % Spline fitting section by section.
     gs = cell(Ns,1);
     for ns = 1:Ns
-        if all(ml)==true
-            idx = 1:Nx;
-        else
-            idx = ceil(ss(ns).PixelIdxList);
-        end
+        idx = Indices{ns};
         yy = yl(idx);
         vv = vl(idx);
         if length(yy)>1
@@ -194,6 +173,51 @@ for nx = 1:Nx
             SpGy(ny, nx) = sg(pt);
             pt = pt + 1;
         end    
+    end
+end
+end
+
+
+% Check Sections.
+function [Ns, Indices] = CheckSection(ml, N)
+if all(ml)==true      
+    Ns = 1;
+    Indices{Ns} = 1:N;
+else
+    Indices = cell(N,1);
+    first = nan;
+    last = nan;
+    Ns = 0;
+    for n = 1:N
+        % Find the first.
+        if n==1
+            if ml(n)==true
+                first = n;
+            end
+        else
+            if ml(n)==true && ml(n-1)==false
+                first = n;
+            end
+        end
+
+        % Find the last.
+        if n==N
+            if ml(n)==true
+                last = n;
+            end
+        else
+            if ml(n)==true && ml(n+1)==false
+                last = n;
+            end
+        end
+
+        % Sum up the total number of sections and compose the Indices.
+        if isfinite(first) && isfinite(last)
+            Ns = Ns + 1;
+            Indices{Ns} = first:last;
+            first = nan;
+            last = nan;
+        end
     end
 end
 end
