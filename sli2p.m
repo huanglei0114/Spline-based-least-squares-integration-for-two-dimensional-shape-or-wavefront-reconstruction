@@ -85,8 +85,14 @@ for ny = 1:Ny
             switch(size(c,2))
                 case 4  % 4 points for piecewise cubic spline fitting.
                     dx = diff(xx);
-                    gs{ns} = dx.*(c(:,4) + dx.*(c(:,3)./2 + dx.*(c(:,2)./3 + dx.*c(:,1)./4)));
-                
+                    if sign(mean(dx))==1
+                        gs{ns} = dx.*(c(:,4) + dx.*(c(:,3)./2 + dx.*(c(:,2)./3 + dx.*c(:,1)./4)));
+                    else
+                        dx = -flipud(dx);
+                        gs{ns} = dx.*(c(:,4) + dx.*(c(:,3)./2 + dx.*(c(:,2)./3 + dx.*c(:,1)./4)));
+                        gs{ns} = -flipud(gs{ns});
+                    end
+                    
                 case 3  % 3 points for 2nd order polynominal fitting.
                     xf = xx-xx(1);
                     ff = c(:,3) + xf.*(c(:,2)./2 + xf.*c(:,1)./3);
@@ -143,7 +149,13 @@ for nx = 1:Nx
             switch(size(c,2))
                 case 4  % 4 points for piecewise cubic spline fitting.
                     dy = diff(yy);
-                    gs{ns} = dy.*(c(:,4) + dy.*(c(:,3)./2 + dy.*(c(:,2)./3 + dy.*c(:,1)./4)));
+                    if sign(mean(dy))==1
+                        gs{ns} = dy.*(c(:,4) + dy.*(c(:,3)./2 + dy.*(c(:,2)./3 + dy.*c(:,1)./4)));
+                    else
+                        dy = -flipud(diff(yy));
+                        gs{ns} = dy.*(c(:,4) + dy.*(c(:,3)./2 + dy.*(c(:,2)./3 + dy.*c(:,1)./4)));
+                        gs{ns} = -flipud(gs{ns});
+                    end
                     
                 case 3  % 3 points for 2nd order polynominal fitting.
                     yf = yy-yy(1);
