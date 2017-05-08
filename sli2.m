@@ -1,6 +1,11 @@
 function z_sli2 = sli2(sx, sy, x, y)
 %SLI2 Spline-based Least-squares integration.
 %   D * Z = G (G is mainly composed by spline estimated values).
+%
+%   Reference: 
+%   L. Huang, J. Xue, B. Gao, C. Zuo, and M. Idir, "Spline based least 
+%   squares integration for two-dimensional shape or wavefront 
+%   reconstruction," Optics and Lasers in Engineering 91, 221-226 (2017)
 
 %   Copyright since 2016 by Lei Huang. All Rights Reserved.
 %   E-mail: huanglei0114@gmail.com
@@ -97,7 +102,7 @@ for ny = 1:Ny
                         dx = -flipud(dx);
                         gs{ns} = dx.*(c(:,4) + dx.*(c(:,3)./2 + dx.*(c(:,2)./3 + dx.*c(:,1)./4)));
                         gs{ns} = -flipud(gs{ns});
-                    end
+                    end 
                     
                 case 3  % 3 points for 2nd order polynominal fitting.
                     % Here we do not use the polynomials. 
